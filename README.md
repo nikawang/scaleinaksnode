@@ -3,16 +3,18 @@
 #### Introduction
 Creating a Kubernetes client application that watches for Pods with a specific label on AKS nodes. If a node does not have any Pods with the specified label, the application should delete that node and the specific instance of Azure VMSS. 
 
-1. Watch the state changes of the target Pods on AKS nodes (based on Pod label and namespace) to determine if the corresponding Pods still exist on the node. If not, the node is marked for deletion. Then, wait for a time period to check again if the node still lacks the corresponding Pods. If it does, delete the node.
+1. run a placeholder Pod on the targeted Nodepool, which carries the annotation "cluster-autoscaler.kubernetes.io/safe-to-evict": "false". This ensures that the cluster autoscaler does not scale down these Pods.
 
-2. Start another goroutine to periodically check the nodes in the corresponding node pool to see if they still have the specified Pods. If not, the nodes are marked for deletion. Then, wait for another time period to check again if the nodes still lack the corresponding Pods. If they do, delete the nodes.
+2. Watch the state changes of the target Pods on AKS nodes (based on Pod label and namespace) to determine if the corresponding Pods still exist on the node. If not, the node is marked for deletion. Then, wait for a time period to check again if the node still lacks the corresponding Pods. If it does, delete the node.
 
-3. Node deletion logic:
+3. Start another goroutine to periodically check the nodes in the corresponding node pool to see if they still have the specified Pods. If not, the nodes are marked for deletion. Then, wait for another time period to check again if the nodes still lack the corresponding Pods. If they do, delete the nodes.
+
+4. Node deletion logic:
    - First, perform a taint&drain, then delete the Kubernetes node.
    - Convert the AKS node name (with a base-36 suffix) to an AKS VMSS instance ID (with a base-10 suffix).
    - Delete the AKS VMSS instance.
 
-4. To prevent potential state inconsistencies in the Cluster Autoscaler (CAS) after manually deleting a node or a VMSS instance ID, periodically update the maximum count value of a different node pool that has zero nodes. This action prompts the CAS to synchronize its state accordingly.
+5. To prevent potential state inconsistencies in the Cluster Autoscaler (CAS) after manually deleting a node or a VMSS instance ID, periodically update the maximum count value of a different node pool that has zero nodes. This action prompts the CAS to synchronize its state accordingly.
 
 #### Details
 Your program implements a Kubernetes client that monitors Pods and Nodes in an Azure Kubernetes Service (AKS) cluster and automatically deletes Nodes from the AKS cluster under specific conditions. The main logic of the program is divided into several parts:
@@ -31,13 +33,16 @@ Your program implements a Kubernetes client that monitors Pods and Nodes in an A
      - Converts the AKS Node name to a VMSS instance ID using the `convertNodeNameToVMSS` function.
      - Deletes the corresponding VMSS instance using the Azure VMSS client.
 
-4. **Periodic Node Check**:
+4. **Placeholder Pods**:
+    - Placeholder pods are deployed with the annotation cluster-autoscaler.kubernetes.io/safe-to-evict: "false" to indicate to the cluster autoscaler that these pods should not be evicted, thus preventing the node from being scaled down.
+
+5. **Periodic Node Check**:
    - There is a periodically running goroutine in the program that checks if Nodes in the NodePool are not running Pods with the specified label. If a Node does not run Pods with the specified label for two consecutive check cycles, it will be deleted.
 
-5. **CAS State Synchronization**:
+6. **CAS State Synchronization**:
    - To prevent potential state inconsistencies in the Cluster Autoscaler (CAS) after manual Node or VMSS instance deletions, the program can periodically update the maximum value of a fake NodePool to prompt CAS to synchronize its state.
 
-6. **Signal Handling**:
+7. **Signal Handling**:
    - The `setupSignalHandler` function sets up signal handling to gracefully shut down the program when a termination signal is received.
 
 The program's operation is configured through environment variables, which include:
