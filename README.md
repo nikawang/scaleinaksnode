@@ -1,18 +1,18 @@
 ### Replace the Scale IN for an autoscaling AKS nodepool
 
 #### Introduction
-Creating a Kubernetes client application that watches for Pods with a specific label on AKS nodes. If a node does not have any Pods with the specified label, the application should delete that node (a specific instance of Azure VMSS). This application will run inside the AKS cluster and is to be implemented using Golang.
+Creating a Kubernetes client application that watches for Pods with a specific label on AKS nodes. If a node does not have any Pods with the specified label, the application should delete that node and the specific instance of Azure VMSS. 
 
 1. Watch the state changes of the target Pods on AKS nodes (based on Pod label and namespace) to determine if the corresponding Pods still exist on the node. If not, the node is marked for deletion. Then, wait for a time period to check again if the node still lacks the corresponding Pods. If it does, delete the node.
 
 2. Start another goroutine to periodically check the nodes in the corresponding node pool to see if they still have the specified Pods. If not, the nodes are marked for deletion. Then, wait for another time period to check again if the nodes still lack the corresponding Pods. If they do, delete the nodes.
 
 3. Node deletion logic:
-   - First, perform a drain, then delete the Kubernetes node.
+   - First, perform a taint&drain, then delete the Kubernetes node.
    - Convert the AKS node name (with a base-36 suffix) to an AKS VMSS instance ID (with a base-10 suffix).
    - Delete the AKS VMSS instance.
 
-4. To prevent potential state inconsistencies in the Cluster Autoscaler (CAS) after manually deleting a node or VMSS instance ID, periodically update the maximum value of another fake node pool to allow CAS to synchronize the state back.
+4. To prevent potential state inconsistencies in the Cluster Autoscaler (CAS) after manually deleting a node or a VMSS instance ID, periodically update the maximum count value of a different node pool that has zero nodes. This action prompts the CAS to synchronize its state accordingly.
 
 #### Details
 Your program implements a Kubernetes client that monitors Pods and Nodes in an Azure Kubernetes Service (AKS) cluster and automatically deletes Nodes from the AKS cluster under specific conditions. The main logic of the program is divided into several parts:
