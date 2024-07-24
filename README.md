@@ -1,1 +1,1 @@
-### Replace the Scale IN nodepool for the AKS Cluster Auto-Scaler
+### Replace the Scale IN for an autoscaling AKS nodepool
