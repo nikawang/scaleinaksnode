@@ -42,7 +42,7 @@ func main() {
 	coolDownStr := os.Getenv("COOLDOWN")
 	coolDown, err := strconv.Atoi(coolDownStr)
 	if err != nil {
-		fmt.Printf("Error converting COOLDOWN to int: %s", err)
+		log.Printf("Error converting COOLDOWN to int: %s", err)
 		return
 	}
 
@@ -53,7 +53,7 @@ func main() {
 	is_scheduled_check_flag_str := os.Getenv("SCHEDULED_CHECK_FALG")
 	is_scheduled_check_flag, err := strconv.ParseBool(is_scheduled_check_flag_str)
 	if err != nil {
-		fmt.Printf("Error converting SCHEDULED_CHECK_FALG to bool: %s", err)
+		log.Printf("Error converting SCHEDULED_CHECK_FALG to bool: %s", err)
 		is_scheduled_check_flag = true
 	}
 	if is_scheduled_check_flag {
@@ -99,7 +99,7 @@ func checkAndDeleteNodes(clientset *kubernetes.Clientset, vmssClient compute.Vir
 		if val, ok := node.Labels[labelKey]; ok && val == labelValue {
 			continue
 		}
-		fmt.Printf("Start to check node %s \n", node.Name)
+		log.Printf("Start to check node %s \n", node.Name)
 		// Check if there are any pods with the specified label on the node
 		pods, err := clientset.CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{
 			LabelSelector: fmt.Sprintf("%s=%s", labelKey, labelValue),
@@ -137,7 +137,7 @@ func checkAndDeleteNodes(clientset *kubernetes.Clientset, vmssClient compute.Vir
 					return fmt.Errorf("Error deleting node %s from Kubernetes: %v\n", node.Name, err)
 				}
 				// Delete the VMSS instance
-				fmt.Printf("Deleting VMSS instance with ID: %s\n", instanceID)
+				log.Printf("Deleting VMSS instance with ID: %s\n", instanceID)
 				_, err = vmssClient.Delete(context.TODO(), vmssRG, vmssName, instanceID, nil)
 				if err != nil {
 					return fmt.Errorf("Error deleting VMSS instance: %v\n", err)
@@ -170,7 +170,7 @@ func checkAndDeleteNodes(clientset *kubernetes.Clientset, vmssClient compute.Vir
 	is_fakenp_check_flag_str := os.Getenv("FAKENP_FLAG")
 	is_fakenp_check_flag, err := strconv.ParseBool(is_fakenp_check_flag_str)
 	if err != nil {
-		fmt.Printf("Error converting FAKENP_FLAG to bool: %s", err)
+		log.Printf("Error converting FAKENP_FLAG to bool: %s", err)
 		is_fakenp_check_flag = true
 	}
 	if is_fakenp_check_flag {
@@ -198,7 +198,7 @@ func checkAndDeleteNodes(clientset *kubernetes.Clientset, vmssClient compute.Vir
 		if err != nil {
 			log.Fatalf("Failed to update agent pool: %v", err)
 		}
-		fmt.Printf("Updated agent pool %s with max count %d\n", fakeNP, maxCount)
+		log.Printf("Updated agent pool %s with max count %d\n", fakeNP, maxCount)
 	}
 	return nil
 }
@@ -315,7 +315,7 @@ func watchNodes(clientset *kubernetes.Clientset, vmssClient compute.VirtualMachi
 				})
 
 				if err != nil {
-					fmt.Printf("Error getting pods for node %s: %v\n", nodeName, err)
+					log.Printf("Error getting pods for node %s: %v\n", nodeName, err)
 					continue
 				}
 
@@ -328,7 +328,7 @@ func watchNodes(clientset *kubernetes.Clientset, vmssClient compute.VirtualMachi
 				}
 				if !hasRunningOrPendingPods {
 					// 如果没有其他Running状态的Pod，则删除Node
-					// fmt.Printf("No running or pending pods found on node %s, deleting node...\n", nodeName)
+					// log.Printf("No running or pending pods found on node %s, deleting node...\n", nodeName)
 					if len(pods.Items) == 0 {
 						mutexWatch.Lock()
 						if _, exists := nodesToDeleteWatch[nodeName]; !exists {
@@ -344,7 +344,7 @@ func watchNodes(clientset *kubernetes.Clientset, vmssClient compute.VirtualMachi
 								coolDownStr := os.Getenv("COOLDOWN")
 								coolDown, err := strconv.Atoi(coolDownStr)
 								if err != nil {
-									fmt.Printf("Error converting COOLDOWN to int: %s", err)
+									log.Printf("Error converting COOLDOWN to int: %s", err)
 									return
 								}
 
@@ -356,13 +356,13 @@ func watchNodes(clientset *kubernetes.Clientset, vmssClient compute.VirtualMachi
 								})
 
 								if err != nil {
-									fmt.Printf("Error getting pods for node %s after delay: %v\n", nodeName, err)
+									log.Printf("Error getting pods for node %s after delay: %v\n", nodeName, err)
 									return
 								}
 
 								if len(pods.Items) == 0 {
 									// 如果两分钟后仍然没有Running状态的Pod，则删除Node
-									fmt.Printf("No running or pending pods found on node %s after %s minutes, deleting node...\n", nodeName, coolDownStr)
+									log.Printf("No running or pending pods found on node %s after %s minutes, deleting node...\n", nodeName, coolDownStr)
 									mutexWatch.Lock()
 									// err := AddTaintToNode(clientset, nodeName, &corev1.Taint{
 									// 	Key:    "kubernetes.io/casanti",
@@ -370,7 +370,7 @@ func watchNodes(clientset *kubernetes.Clientset, vmssClient compute.VirtualMachi
 									// 	Effect: corev1.TaintEffectNoSchedule,
 									// })
 									// if err != nil {
-									// 	fmt.Printf("Error adding taint to node %s: %v\n", nodeName, err)
+									// 	log.Printf("Error adding taint to node %s: %v\n", nodeName, err)
 									// 	mutexWatch.Unlock()
 									// 	return
 									// }
@@ -378,7 +378,7 @@ func watchNodes(clientset *kubernetes.Clientset, vmssClient compute.VirtualMachi
 									// Drain Node
 									err = DrainNode(clientset, nodeName)
 									if err != nil {
-										fmt.Printf("Error draining node %s: %v\n", nodeName, err)
+										log.Printf("Error draining node %s: %v\n", nodeName, err)
 										mutexWatch.Unlock()
 										return
 									}
@@ -387,7 +387,7 @@ func watchNodes(clientset *kubernetes.Clientset, vmssClient compute.VirtualMachi
 									vmssName, instanceID, err := convertNodeNameToVMSS(nodeName)
 									fmt.Println("vmssName:", vmssName, "instanceID:", instanceID)
 									if err != nil {
-										fmt.Printf("Error converting node name to VMSS name and instance ID: %v\n", err)
+										log.Printf("Error converting node name to VMSS name and instance ID: %v\n", err)
 										mutexWatch.Unlock()
 										return
 									}
@@ -395,17 +395,17 @@ func watchNodes(clientset *kubernetes.Clientset, vmssClient compute.VirtualMachi
 									// 从 Kubernetes 集群中删除节点
 									err = deleteNode(clientset, nodeName)
 									if err != nil {
-										fmt.Printf("Error deleting node %s from Kubernetes: %v\n", nodeName, err)
+										log.Printf("Error deleting node %s from Kubernetes: %v\n", nodeName, err)
 										mutexWatch.Unlock()
 										return
 									}
-									fmt.Printf("Node %s deleted from Kubernetes\n", nodeName)
+									log.Printf("Node %s deleted from Kubernetes\n", nodeName)
 
 									// 删除VMSS实例
-									fmt.Printf("Deleting VMSS instance with ID: %s\n", instanceID)
+									log.Printf("Deleting VMSS instance with ID: %s\n", instanceID)
 									_, err = vmssClient.Delete(context.TODO(), vmssRG, vmssName, instanceID, nil)
 									if err != nil {
-										fmt.Printf("Error deleting VMSS instance: %v\n", err)
+										log.Printf("Error deleting VMSS instance: %v\n", err)
 										mutexWatch.Unlock()
 										return
 									}
@@ -435,17 +435,17 @@ func watchNodes(clientset *kubernetes.Clientset, vmssClient compute.VirtualMachi
 				// 检查节点上是否已经有了对应的 Place Holder pod
 				exists, err := doesPlaceHolderPodExistOnNode(clientset, node.Name)
 				if err != nil {
-					fmt.Printf("Error checking for existing Place Holder pod on node %s: %v\n", node.Name, err)
+					log.Printf("Error checking for existing Place Holder pod on node %s: %v\n", node.Name, err)
 					continue
 				}
 				if !exists {
 					// 在 Ready 节点上运行 Place Holder pod
 					err := runNginxPodOnNode(clientset, node.Name)
 					if err != nil {
-						fmt.Printf("Error running Place Holder pod on node %s: %v\n", node.Name, err)
+						log.Printf("Error running Place Holder pod on node %s: %v\n", node.Name, err)
 					}
 				} else {
-					// fmt.Printf("Place Holder pod already exists on node %s, skipping creation\n", node.Name)
+					// log.Printf("Place Holder pod already exists on node %s, skipping creation\n", node.Name)
 				}
 			}
 		case <-stopCh:
@@ -499,7 +499,7 @@ func isNodeReady(node *corev1.Node) bool {
 
 // DrainNode 使用 kubectl 的 drain 包来驱逐节点上的 Pod
 func DrainNode(clientset *kubernetes.Clientset, nodeName string) error {
-	fmt.Printf("Draining node: %s\n", nodeName)
+	log.Printf("Draining node: %s\n", nodeName)
 
 	node, err := clientset.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
 	if err != nil {
@@ -522,7 +522,7 @@ func DrainNode(clientset *kubernetes.Clientset, nodeName string) error {
 
 // AddTaintToNode 使用 client-go 库给节点添加 taint
 // func AddTaintToNode(clientset *kubernetes.Clientset, nodeName string, taint *corev1.Taint) error {
-// 	fmt.Printf("Adding taint to node: %s\n", nodeName)
+// 	log.Printf("Adding taint to node: %s\n", nodeName)
 // 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 // 		node, err := clientset.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
 // 		if err != nil {
@@ -533,7 +533,7 @@ func DrainNode(clientset *kubernetes.Clientset, nodeName string) error {
 // 		for _, existingTaint := range node.Spec.Taints {
 // 			if existingTaint.Key == taint.Key && existingTaint.Value == taint.Value && existingTaint.Effect == taint.Effect {
 // 				// Taint 已存在，无需添加
-// 				fmt.Printf("Taint has been existed to node: %s\n", nodeName)
+// 				log.Printf("Taint has been existed to node: %s\n", nodeName)
 // 				return nil
 // 			}
 // 		}
@@ -542,7 +542,7 @@ func DrainNode(clientset *kubernetes.Clientset, nodeName string) error {
 // 		node.Spec.Taints = append(node.Spec.Taints, *taint)
 // 		// _, err = clientset.CoreV1().Nodes().Update(context.Background(), node, metav1.UpdateOptions{})
 
-// 		fmt.Printf("Taint added to node: %s\n", nodeName)
+// 		log.Printf("Taint added to node: %s\n", nodeName)
 // 		return err
 // 	})
 // }
@@ -573,7 +573,7 @@ func convertNodeNameToVMSS(nodeName string) (vmssName string, instanceID string,
 }
 
 func runNginxPodOnNode(clientset *kubernetes.Clientset, nodeName string) error {
-	fmt.Printf("Creating Place Holder pod on node: %s\n", nodeName)
+	log.Printf("Creating Place Holder pod on node: %s\n", nodeName)
 	labels := map[string]string{
 		"casanti": "placeholder", // 例如，添加一个标签 app=nginx
 	}
@@ -607,9 +607,9 @@ func runNginxPodOnNode(clientset *kubernetes.Clientset, nodeName string) error {
 
 	_, err := clientset.CoreV1().Pods("default").Create(context.Background(), pod, metav1.CreateOptions{})
 	if err != nil {
-		fmt.Printf("Failed to create Place Holder pod on node %s: %v\n", nodeName, err)
+		log.Printf("Failed to create Place Holder pod on node %s: %v\n", nodeName, err)
 	} else {
-		fmt.Printf("Place Holder pod created on node: %s\n", nodeName)
+		log.Printf("Place Holder pod created on node: %s\n", nodeName)
 	}
 	return err
 }
