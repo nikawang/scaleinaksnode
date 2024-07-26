@@ -42,7 +42,7 @@ func main() {
 	coolDownStr := os.Getenv("COOLDOWN")
 	coolDown, err := strconv.Atoi(coolDownStr)
 	if err != nil {
-		log.Printf("Error converting COOLDOWN to int: %s", err)
+		log.Printf("Error converting COOLDOWN to int: %s\n", err)
 		return
 	}
 
@@ -53,7 +53,7 @@ func main() {
 	is_scheduled_check_flag_str := os.Getenv("SCHEDULED_CHECK_FALG")
 	is_scheduled_check_flag, err := strconv.ParseBool(is_scheduled_check_flag_str)
 	if err != nil {
-		log.Printf("Error converting SCHEDULED_CHECK_FALG to bool: %s", err)
+		log.Printf("Error converting SCHEDULED_CHECK_FALG to bool: %s\n", err)
 		is_scheduled_check_flag = true
 	}
 	if is_scheduled_check_flag {
@@ -61,7 +61,7 @@ func main() {
 			for {
 				select {
 				case <-stopCh:
-					log.Println("Shutting down node watcher...")
+					log.Println("shutting down node watcher...")
 					return
 				case <-time.After(time.Duration(coolDown) * 2 * time.Second):
 					err := checkAndDeleteNodes(clientset, vmssClient, aksClient)
@@ -75,7 +75,7 @@ func main() {
 
 	// Wait for stop signal
 	<-stopCh
-	fmt.Println("Shutting down node watcher...")
+	log.Println("shutting down node watcher...")
 }
 
 func checkAndDeleteNodes(clientset *kubernetes.Clientset, vmssClient compute.VirtualMachineScaleSetVMsClient, aksClient containerservice.AgentPoolsClient) error {
@@ -91,6 +91,7 @@ func checkAndDeleteNodes(clientset *kubernetes.Clientset, vmssClient compute.Vir
 		LabelSelector: labelSelector,
 	})
 	if err != nil {
+		log.Printf("failed to list nodes: %v\n", err)
 		return fmt.Errorf("failed to list nodes: %v", err)
 	}
 	currentCheck := make(map[string]bool)
@@ -106,6 +107,7 @@ func checkAndDeleteNodes(clientset *kubernetes.Clientset, vmssClient compute.Vir
 			FieldSelector: fmt.Sprintf("spec.nodeName=%s", node.Name),
 		})
 		if err != nil {
+			log.Printf("failed to list pods on node %s: %v\n", node.Name, err)
 			return fmt.Errorf("failed to list pods on node %s: %v", node.Name, err)
 		}
 
@@ -124,23 +126,27 @@ func checkAndDeleteNodes(clientset *kubernetes.Clientset, vmssClient compute.Vir
 				// Drain the node
 				err = DrainNode(clientset, node.Name)
 				if err != nil {
+					log.Printf("failed to drain node %s: %v\n", node.Name, err)
 					return fmt.Errorf("failed to drain node %s: %v", node.Name, err)
 				}
 
 				// Convert AKS node name to VMSS instance ID
 				vmssName, instanceID, err := convertNodeNameToVMSS(node.Name)
 				if err != nil {
+					log.Printf("failed to convert node name to VMSS instance ID: %v\n", err)
 					return fmt.Errorf("failed to convert node name to VMSS instance ID: %v", err)
 				}
 				err = deleteNode(clientset, node.Name)
 				if err != nil {
-					return fmt.Errorf("Error deleting node %s from Kubernetes: %v\n", node.Name, err)
+					log.Printf("Error deleting node %s from Kubernetes: %v\n", node.Name, err)
+					return fmt.Errorf("error deleting node %s from Kubernetes: %v", node.Name, err)
 				}
 				// Delete the VMSS instance
 				log.Printf("Deleting VMSS instance with ID: %s\n", instanceID)
 				_, err = vmssClient.Delete(context.TODO(), vmssRG, vmssName, instanceID, nil)
 				if err != nil {
-					return fmt.Errorf("Error deleting VMSS instance: %v\n", err)
+					log.Printf("Error deleting VMSS instance: %v\n", err)
+					return fmt.Errorf("error deleting VMSS instance: %v", err)
 				}
 				delete(nodesToCheckCycle, node.Name)
 				log.Printf("Deleted VMSS instance %s and node %s\n", instanceID, node.Name)
@@ -166,11 +172,11 @@ func checkAndDeleteNodes(clientset *kubernetes.Clientset, vmssClient compute.Vir
 		}
 	}
 	//print nodesToCheckCycle
-	fmt.Println("nodesToCheckCycle at this round:", nodesToCheckCycle)
+	log.Printf("nodesToCheckCycle at this round: %v\n", nodesToCheckCycle)
 	is_fakenp_check_flag_str := os.Getenv("FAKENP_FLAG")
 	is_fakenp_check_flag, err := strconv.ParseBool(is_fakenp_check_flag_str)
 	if err != nil {
-		log.Printf("Error converting FAKENP_FLAG to bool: %s", err)
+		log.Printf("Error converting FAKENP_FLAG to bool: %s\n", err)
 		is_fakenp_check_flag = true
 	}
 	if is_fakenp_check_flag {
@@ -220,24 +226,27 @@ func getKubernetesClient() *kubernetes.Clientset {
 		kubeconfig := filepath.Join(home, ".kube", "config")
 		if _, err := os.Stat(kubeconfig); err == nil {
 			// 如果 .kube/config 存在，则使用该配置
-			config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+			config, _ = clientcmd.BuildConfigFromFlags("", kubeconfig)
 		} else {
 			// 如果 .kube/config 不存在，检查是否在集群内部运行
 			if _, err := os.Stat("/var/run/secrets/kubernetes.io/serviceaccount/token"); err == nil {
-				config, err = rest.InClusterConfig()
+				config, _ = rest.InClusterConfig()
 			}
 		}
 	} else {
-		panic(fmt.Errorf("Error finding kubeconfig or service account token"))
+		log.Println("error finding kubeconfig or service account token")
+		panic(fmt.Errorf("error finding kubeconfig or service account token"))
 	}
 
 	if err != nil {
-		panic(fmt.Errorf("Error creating kubernetes client config: %s", err))
+		log.Printf("error creating kubernetes client config: %s\n", err)
+		panic(fmt.Errorf("error creating kubernetes client config: %s", err))
 	}
 
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		panic(fmt.Errorf("Error creating kubernetes client: %s", err))
+		log.Printf("Error creating kubernetes client: %s\n", err)
+		panic(fmt.Errorf("error creating kubernetes client: %s", err))
 	}
 
 	return clientset
@@ -257,7 +266,7 @@ func getAzClient() (compute.VirtualMachineScaleSetVMsClient, containerservice.Ag
 }
 
 func watchNodes(clientset *kubernetes.Clientset, vmssClient compute.VirtualMachineScaleSetVMsClient, stopCh chan os.Signal) {
-	fmt.Println("Starting to watch nodes and pods...")
+	log.Println("Starting to watch nodes and pods...")
 
 	// 从环境变量获取参数
 	labelKey := os.Getenv("LABEL_KEY")
@@ -265,10 +274,10 @@ func watchNodes(clientset *kubernetes.Clientset, vmssClient compute.VirtualMachi
 	vmssRG := os.Getenv("VMSS_RG")
 	namespace := os.Getenv("NAMESPACE")
 	// vmssName := os.Getenv("VMSS_NAME")
-	fmt.Println("Label key:", labelKey)
-	fmt.Println("Label value:", labelValue)
-	fmt.Println("Resource group:", vmssRG)
-	// fmt.Println("VMSS name:", vmssName)
+	log.Printf("Label key %s\n", labelKey)
+	log.Printf("Label value: %s\n", labelValue)
+	log.Printf("Resource group: %s\n", vmssRG)
+	// log.Printf("VMSS name:", vmssName)
 
 	watcher, err := clientset.CoreV1().Pods(namespace).Watch(context.TODO(), metav1.ListOptions{})
 	if err != nil {
@@ -295,7 +304,7 @@ func watchNodes(clientset *kubernetes.Clientset, vmssClient compute.VirtualMachi
 	for {
 		select {
 		case event := <-ch:
-			// fmt.Println("Received pod event:", event.Type)
+			// log.Printf("Received pod event:", event.Type)
 			pod, ok := event.Object.(*corev1.Pod)
 			if !ok {
 				continue
@@ -335,7 +344,7 @@ func watchNodes(clientset *kubernetes.Clientset, vmssClient compute.VirtualMachi
 							// 如果节点不在删除队列中，则添加到队列并启动 goroutine
 							nodesToDeleteWatch[nodeName] = true
 							//print nodesToDelete
-							fmt.Println("nodesToDelete:", nodesToDeleteWatch)
+							log.Printf("nodesToDelete: %v\n", nodesToDeleteWatch)
 							mutexWatch.Unlock()
 
 							// 给Node添加NoSchedule taint
@@ -344,7 +353,7 @@ func watchNodes(clientset *kubernetes.Clientset, vmssClient compute.VirtualMachi
 								coolDownStr := os.Getenv("COOLDOWN")
 								coolDown, err := strconv.Atoi(coolDownStr)
 								if err != nil {
-									log.Printf("Error converting COOLDOWN to int: %s", err)
+									log.Printf("Error converting COOLDOWN to int: %s\n", err)
 									return
 								}
 
@@ -362,7 +371,7 @@ func watchNodes(clientset *kubernetes.Clientset, vmssClient compute.VirtualMachi
 
 								if len(pods.Items) == 0 {
 									// 如果两分钟后仍然没有Running状态的Pod，则删除Node
-									log.Printf("No running or pending pods found on node %s after %s minutes, deleting node...\n", nodeName, coolDownStr)
+									log.Printf("No running or pending pods found on node %s after %s seconds, deleting node...\n", nodeName, coolDownStr)
 									mutexWatch.Lock()
 									// err := AddTaintToNode(clientset, nodeName, &corev1.Taint{
 									// 	Key:    "kubernetes.io/casanti",
@@ -385,7 +394,7 @@ func watchNodes(clientset *kubernetes.Clientset, vmssClient compute.VirtualMachi
 
 									// 转换Node名称到VMSS实例ID
 									vmssName, instanceID, err := convertNodeNameToVMSS(nodeName)
-									fmt.Println("vmssName:", vmssName, "instanceID:", instanceID)
+									log.Printf("vmssName: %s, instanceID: %s\n", vmssName, instanceID)
 									if err != nil {
 										log.Printf("Error converting node name to VMSS name and instance ID: %v\n", err)
 										mutexWatch.Unlock()
@@ -410,12 +419,12 @@ func watchNodes(clientset *kubernetes.Clientset, vmssClient compute.VirtualMachi
 										return
 									}
 									delete(nodesToDeleteWatch, nodeName) // 删除成功后，从删除队列中移除节点
-									fmt.Println("nodesToDelete:", nodesToDeleteWatch)
+									log.Printf("nodesToDelete: %v\n", nodesToDeleteWatch)
 									mutexWatch.Unlock()
 								} else {
 									mutexWatch.Lock()
 									delete(nodesToDeleteWatch, nodeName) // 如果节点上有Pods，从删除队列中移除节点
-									fmt.Println("nodesToDelete:", nodesToDeleteWatch)
+									log.Printf("nodesToDelete: %v\n", nodesToDeleteWatch)
 									mutexWatch.Unlock()
 								}
 							}(nodeName)
@@ -426,7 +435,7 @@ func watchNodes(clientset *kubernetes.Clientset, vmssClient compute.VirtualMachi
 				}
 			}
 		case nodeEvent := <-nodeCh:
-			// fmt.Println("Received node event:", nodeEvent.Type)
+			// log.Printf("Received node event:", nodeEvent.Type)
 			node, ok := nodeEvent.Object.(*corev1.Node)
 			if !ok {
 				continue
@@ -449,10 +458,10 @@ func watchNodes(clientset *kubernetes.Clientset, vmssClient compute.VirtualMachi
 				}
 			}
 		case <-stopCh:
-			fmt.Println("Received stop signal, cleaning up...")
+			log.Println("Received stop signal, cleaning up...")
 			watcher.Stop()
 			nodeWatcher.Stop()
-			fmt.Println("Node and pod watchers stopped.")
+			log.Println("Node and pod watchers stopped.")
 			return
 		}
 	}
@@ -466,6 +475,7 @@ func deleteNode(clientset *kubernetes.Clientset, nodeName string) error {
 	}
 	// 删除节点
 	if err := clientset.CoreV1().Nodes().Delete(context.TODO(), nodeName, deletePolicy); err != nil {
+		log.Printf("failed to delete node %s: %v\n", nodeName, err)
 		return fmt.Errorf("failed to delete node %s: %v", nodeName, err)
 	}
 	return nil
@@ -563,6 +573,7 @@ func convertNodeNameToVMSS(nodeName string) (vmssName string, instanceID string,
 	// 将 36 进制的尾数转换为 10 进制
 	numericID, convErr := strconv.ParseUint(base36ID, 36, 64)
 	if convErr != nil {
+		log.Printf("failed to convert base36 to base10: %v\n", convErr)
 		err = fmt.Errorf("failed to convert base36 to base10: %v", convErr)
 		return
 	}
