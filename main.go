@@ -112,30 +112,33 @@ func processNodesbyEvents(clientset *kubernetes.Clientset, vmssClient compute.Vi
 			})
 			// mutexWatch.Unlock()
 			if err != nil {
-				log.Printf("Pod Event: Error getting pods for node %s after delay: %v\n", nodeName, err)
+				log.Printf("Process Pod Event: Error getting pods for node %s after delay: %v\n", nodeName, err)
 				return
 			}
 
 			var podList []corev1.Pod
 			for _, pod := range pods.Items {
+
 				if string(pod.Status.Phase) == "Running" || string(pod.Status.Phase) == "Pending" {
 					podList = append(podList, pod)
 					// hasRunningOrPendingPods = true
 					break
+				} else {
+					log.Printf("Process Pod Event: Status Check\t Node %s Pod  %s status %s ... \n", nodeName, pod.Name, pod.Status.Phase)
 				}
 			}
 
 			if len(podList) == 0 {
 				// 如果两分钟后仍然没有Running状态的Pod，则删除Node
-				log.Printf("Pod Event: No running or pending pods found on node %s after %s seconds, confirm to delete node...\n", nodeName, coolDownStr)
-				mutexWatch.Lock()
+				log.Printf("Process Pod Event: No running or pending pods found on node %s after %s seconds, confirm to delete node...\n", nodeName, coolDownStr)
+				// mutexWatch.Lock()
 
 				// Drain Node
 				err = DrainNode(clientset, nodeName)
-				log.Printf("On Scheduled: Drain node: %s Completed \n", nodeName)
+				log.Printf("Process Pod Event: Drain node: %s Completed \n", nodeName)
 				if err != nil {
-					log.Printf("Pod Event: Error draining node %s: %v\n", nodeName, err)
-					mutexWatch.Unlock()
+					log.Printf("Process Pod Event: Error draining node %s: %v\n", nodeName, err)
+					// mutexWatch.Unlock()
 					continue
 				}
 
@@ -144,7 +147,7 @@ func processNodesbyEvents(clientset *kubernetes.Clientset, vmssClient compute.Vi
 				log.Printf("Pod Event: vmssName: %s, instanceID: %s\n", vmssName, instanceID)
 				if err != nil {
 					log.Printf("Pod Event: Error converting node name to VMSS name and instance ID: %v\n", err)
-					mutexWatch.Unlock()
+					// mutexWatch.Unlock()
 					continue
 				}
 
@@ -153,7 +156,7 @@ func processNodesbyEvents(clientset *kubernetes.Clientset, vmssClient compute.Vi
 				err = deleteNode(clientset, nodeName)
 				if err != nil {
 					log.Printf("Pod Event: Error deleting node %s from Kubernetes: %v\n", nodeName, err)
-					mutexWatch.Unlock()
+					// mutexWatch.Unlock()
 					continue
 				}
 				log.Printf("Pod Event: Node %s deleted from Kubernetes\n", nodeName)
@@ -163,9 +166,10 @@ func processNodesbyEvents(clientset *kubernetes.Clientset, vmssClient compute.Vi
 				_, err = vmssClient.Delete(context.TODO(), vmssRG, vmssName, instanceID, nil)
 				if err != nil {
 					log.Printf("Pod Event: Error deleting VMSS instance: %v\n", err)
-					mutexWatch.Unlock()
+					// mutexWatch.Unlock()
 					continue
 				}
+				mutexWatch.Lock()
 				delete(nodesToDeleteWatch, nodeName) // 删除成功后，从删除队列中移除节点
 				log.Printf("Pod Event: Candidate delete node list: %v\n", nodesToDeleteWatch)
 				mutexWatch.Unlock()
@@ -176,8 +180,8 @@ func processNodesbyEvents(clientset *kubernetes.Clientset, vmssClient compute.Vi
 				}
 				mutexWatch.Lock()
 				delete(nodesToDeleteWatch, nodeName) // 如果节点上有Pods，从删除队列中移除节点
-				log.Printf("Pod Event: There're Pods %s\t  on node %s, remove node name from candidate deleting node\n", podNames, nodeName)
-				log.Printf("Pod Event: candidate delete node list: %v\n", nodesToDeleteWatch)
+				log.Printf("Process Pod Event: There're Pods %s\t  on node %s, remove node name from candidate deleting node\n", podNames, nodeName)
+				log.Printf("Process Pod Event: candidate delete node list: %v\n", nodesToDeleteWatch)
 				mutexWatch.Unlock()
 			}
 			// }(nodeName)
@@ -445,7 +449,7 @@ func watchK8SEvents(clientset *kubernetes.Clientset, vmssClient compute.VirtualM
 			// log.Printf("Received pod event:", event.Type)
 			pod, ok := event.Object.(*corev1.Pod)
 			if !ok {
-				log.Println("Pod watcher channel closed unexpectedly, exiting...")
+				log.Println("Watch Pod Event: Pod watcher channel closed unexpectedly, exiting...")
 				os.Exit(1)
 			}
 
@@ -460,7 +464,7 @@ func watchK8SEvents(clientset *kubernetes.Clientset, vmssClient compute.VirtualM
 				})
 
 				if err != nil {
-					log.Printf("Pod Event: Error getting pods for node %s: %v\n", nodeName, err)
+					log.Printf("Watch Pod Event: Error getting pods for node %s: %v\n", nodeName, err)
 					continue
 				}
 
@@ -477,14 +481,14 @@ func watchK8SEvents(clientset *kubernetes.Clientset, vmssClient compute.VirtualM
 				// 如果没有其他Running状态的Pod，则删除Node
 				// log.Printf("No running or pending pods found on node %s, deleting node...\n", nodeName)
 				if len(podList) == 0 {
-					log.Printf("Pod Event: No running or pending pods found on node %s, consider to delete the node...\n", nodeName)
+					log.Printf("Watch Pod Event: No running or pending pods found on node %s, consider to delete the node...\n", nodeName)
 					mutexWatch.Lock()
 					if _, exists := nodesToDeleteWatch[nodeName]; !exists {
 						// 如果节点在删除队列中，则添加到队列并启动 goroutine
 						// mutexWatch.Lock()
 						nodesToDeleteWatch[nodeName] = true
 						//print nodesToDelete
-						log.Printf("Pod Event: nodesToDelete: %v\n", nodesToDeleteWatch)
+						log.Printf("Watch Pod Event: nodesToDelete: %v\n", nodesToDeleteWatch)
 
 					} else {
 						podName := ""
@@ -492,7 +496,7 @@ func watchK8SEvents(clientset *kubernetes.Clientset, vmssClient compute.VirtualM
 							podName += pod.Name + " "
 						}
 
-						log.Printf("Pod Event: Node %s already in candidate delete node list, skip to add it...\n", nodeName)
+						log.Printf("Watch Pod Event: Node %s already in candidate delete node list, skip to add it...\n", nodeName)
 					}
 					mutexWatch.Unlock()
 
