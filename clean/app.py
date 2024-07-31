@@ -5,6 +5,8 @@ from kubernetes.client.rest import ApiException
 import os
 import logging
 import time
+from azure.mgmt.compute.models import VirtualMachineScaleSetVMInstanceRequiredIDs
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -105,7 +107,8 @@ while True:
             )
             # 检查电源状态是否为'运行中'
             for status in instance_view.statuses:
-                if status.code == 'PowerState/running':
+                print(status.code)
+                if status.code == 'ProvisioningState/succeeded':
                     vm_instance_ids.append(vm_instance.instance_id)
                     break
         logging.info(f"Current VMSS instance IDs: {vm_instance_ids}")
@@ -115,10 +118,13 @@ while True:
         if to_delete_vm_instance_ids:
             logging.info(f"Deleting VM instances: {to_delete_vm_instance_ids}")
             # 调用API批量删除VM实例
+            vm_instance_ids_model = VirtualMachineScaleSetVMInstanceRequiredIDs(instance_ids=list(to_delete_vm_instance_ids)
+)
             async_delete_operation = compute_client.virtual_machine_scale_sets.begin_delete_instances(
                 resource_group_name,
                 vmss_name,
-                vm_instance_ids=list(to_delete_vm_instance_ids)
+                # vm_instance_ids=list(to_delete_vm_instance_ids),
+                vm_instance_i_ds=vm_instance_ids_model,
             )
             # 等待删除操作完成
             async_delete_operation.wait()
