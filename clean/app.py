@@ -110,7 +110,7 @@ while True:
                     break
         logging.info(f"Current VMSS instance IDs: {vm_instance_ids}")
         current_excess_vm_instance_ids = set(vm_id for vm_id in vm_instance_ids if vm_id not in aks_instance_ids)
-
+        logging.info(f"Current Candidate Delete VMSS instance IDs: {current_excess_vm_instance_ids}")
         to_delete_vm_instance_ids = current_excess_vm_instance_ids.intersection(previous_excess_vm_instance_ids)
         if to_delete_vm_instance_ids:
             logging.info(f"Deleting VM instances: {to_delete_vm_instance_ids}")
