@@ -127,7 +127,7 @@ while True:
                 vm_instance_i_ds=vm_instance_ids_model,
             )
             # 等待删除操作完成
-            async_delete_operation.wait()
+            # async_delete_operation.wait()
             logging.info(f"Deleted VM instances: {to_delete_vm_instance_ids}")
 
         # 更新上一轮的记录为这一轮的结果
