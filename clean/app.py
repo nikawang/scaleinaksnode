@@ -13,7 +13,8 @@ logging.basicConfig(
     format='%(asctime)s %(levelname)s: %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
-
+azure_logger = logging.getLogger('azure')
+azure_logger.setLevel(logging.WARNING)
 
 def convert_node_name_to_vmss(node_name):
     # 使用 "vmss" 作为分隔符来切割字符串
@@ -85,16 +86,19 @@ previous_excess_vm_instance_ids = set()
 while True:
     try:
         # 获取所有节点
+        logging.info(f"Start to check nodes:\n======================")
         nodes = v1.list_node(label_selector=label_selector)
+    except Exception as e:
+        logging.error(f"An error occurre on listing nodes: {e}")
+        os._exit(1)
+
+    try:
         ready_nodes = []  
         # aks_node_count = 0
         for node in nodes.items:
-            # 检查节点是否处于Ready状态
-            for condition in node.status.conditions:
-                if condition.type == 'Ready' and condition.status == 'True':
-                    ready_nodes.append(node.metadata.name)
-        logging.info(f"Number of Ready nodes with label '{label_selector}': {len(ready_nodes)}")
-
+            ready_nodes.append(node.metadata.name)
+        logging.info(f"Number of nodes with label '{label_selector}': {len(ready_nodes)}")
+        logging.info(f"AKS nodes name: {ready_nodes}")
         aks_instance_ids = [convert_node_name_to_vmss(name) for name in ready_nodes]
         logging.info(f"AKS VMSS instance IDs: {aks_instance_ids}")
         # 获取VMSS的实例数量
@@ -107,7 +111,7 @@ while True:
             )
             # 检查电源状态是否为'运行中'
             for status in instance_view.statuses:
-                print(status.code)
+                # print(status.code)
                 if status.code == 'ProvisioningState/succeeded':
                     vm_instance_ids.append(vm_instance.instance_id)
                     break
