@@ -1,13 +1,10 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand"
-	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -19,7 +16,6 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/profiles/latest/containerservice/mgmt/containerservice"
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2021-03-01/compute"
-	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure/auth"
 	"github.com/Azure/go-autorest/autorest/to"
 	corev1 "k8s.io/api/core/v1"
@@ -34,8 +30,9 @@ import (
 var nodesToDeleteWatch = make(map[string]bool)
 var mutexWatch sync.Mutex // 使用互斥锁来保证 map 的并发安全
 var nodesToCheckCycle = make(map[string]bool)
-var url = fmt.Sprintf("https://management.azure.com/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/virtualMachineScaleSets/%s/delete?api-version=2024-03-01",
-	os.Getenv("AZURE_SUBSCRIPTION_ID"), os.Getenv("VMSS_RG"), os.Getenv("VMSS_NAME"))
+
+// var url = fmt.Sprintf("https://management.azure.com/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/virtualMachineScaleSets/%s/delete?api-version=2024-03-01",
+// 	os.Getenv("AZURE_SUBSCRIPTION_ID"), os.Getenv("VMSS_RG"), os.Getenv("VMSS_NAME"))
 
 func main() {
 	log.Printf("Hello")
@@ -101,55 +98,55 @@ func main() {
 	log.Println("shutting down node watcher...")
 }
 
-func DeleteVMInstances(vmssClient compute.VirtualMachineScaleSetVMsClient, instanceIDs []string) error {
-	// 创建一个 authorizer
-	authorizer := vmssClient.Authorizer
-	// 创建请求体
-	body := struct {
-		InstanceIds []string `json:"instanceIds"`
-	}{
-		InstanceIds: instanceIDs,
-	}
-	bodyBytes, err := json.Marshal(body)
-	if err != nil {
-		return err
-	}
+// func DeleteVMInstances(vmssClient compute.VirtualMachineScaleSetVMsClient, instanceIDs []string) error {
+// 	// 创建一个 authorizer
+// 	authorizer := vmssClient.Authorizer
+// 	// 创建请求体
+// 	body := struct {
+// 		InstanceIds []string `json:"instanceIds"`
+// 	}{
+// 		InstanceIds: instanceIDs,
+// 	}
+// 	bodyBytes, err := json.Marshal(body)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	// 构建 HTTP 请求
-	req, err := http.NewRequest("POST", url, bytes.NewReader(bodyBytes))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
+// 	// 构建 HTTP 请求
+// 	req, err := http.NewRequest("POST", url, bytes.NewReader(bodyBytes))
+// 	if err != nil {
+// 		return err
+// 	}
+// 	req.Header.Set("Content-Type", "application/json")
 
-	// 使用 authorizer 为请求添加授权头部
-	preparer := autorest.CreatePreparer(
-		authorizer.WithAuthorization(),
-	)
-	req, err = preparer.Prepare(req)
-	if err != nil {
-		return err
-	}
+// 	// 使用 authorizer 为请求添加授权头部
+// 	preparer := autorest.CreatePreparer(
+// 		authorizer.WithAuthorization(),
+// 	)
+// 	req, err = preparer.Prepare(req)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	// 创建一个 HTTP 客户端并发送请求
-	client := autorest.NewClientWithUserAgent("Azure-Go-SDK/2024-03-01")
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
+// 	// 创建一个 HTTP 客户端并发送请求
+// 	client := autorest.NewClientWithUserAgent("Azure-Go-SDK/2024-03-01")
+// 	resp, err := client.Do(req)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	defer resp.Body.Close()
 
-	// 检查响应状态码
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
-		log.Printf("API call to delete VM instances returned status: %s", resp.Status)
-		return fmt.Errorf("API call to delete VM instances returned status: %s", resp.Status)
-	}
+// 	// 检查响应状态码
+// 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
+// 		log.Printf("API call to delete VM instances returned status: %s", resp.Status)
+// 		return fmt.Errorf("API call to delete VM instances returned status: %s", resp.Status)
+// 	}
 
-	// 处理响应
-	// log.Printf("VMSS DeleteResponse status: %s\n", resp.Status)
+// 	// 处理响应
+// 	// log.Printf("VMSS DeleteResponse status: %s\n", resp.Status)
 
-	return nil
-}
+// 	return nil
+// }
 
 func processNodesbyEvents(clientset *kubernetes.Clientset, vmssClient compute.VirtualMachineScaleSetVMsClient) {
 	labelKey := os.Getenv("LABEL_KEY")
@@ -158,12 +155,12 @@ func processNodesbyEvents(clientset *kubernetes.Clientset, vmssClient compute.Vi
 	namespace := os.Getenv("NAMESPACE")
 	coolDownStr := os.Getenv("COOLDOWN")
 	coolDown, _ := strconv.Atoi(coolDownStr)
-	isDeleteInBatchStr := os.Getenv("DELETE_IN_BATCH")
-	isDeleteInBatch, _ := strconv.ParseBool(isDeleteInBatchStr)
+	// isDeleteInBatchStr := os.Getenv("DELETE_IN_BATCH")
+	// isDeleteInBatch, _ := strconv.ParseBool(isDeleteInBatchStr)
 
 	// vmssName := os.Getenv("VMSS_NAME")
 	for {
-		vmssInstances := []string{}
+		// vmssInstances := []string{}
 		mutexWatch.Lock()
 		// nodesToDeleteWatch 赋值给新的 map，以便在迭代时删除元素
 		nodesToDelete := make(map[string]bool)
@@ -220,7 +217,7 @@ func processNodesbyEvents(clientset *kubernetes.Clientset, vmssClient compute.Vi
 					// mutexWatch.Unlock()
 					continue
 				}
-				vmssInstances = append(vmssInstances, instanceID)
+				// vmssInstances = append(vmssInstances, instanceID)
 
 				// 从 Kubernetes 集群中删除节点
 				log.Printf("Pod Event: Deleting K8S node : %s\n", nodeName)
@@ -233,15 +230,15 @@ func processNodesbyEvents(clientset *kubernetes.Clientset, vmssClient compute.Vi
 				log.Printf("Pod Event: Node %s deleted from Kubernetes\n", nodeName)
 
 				// 删除VMSS实例
-				if !isDeleteInBatch {
-					log.Printf("Pod Event: Deleting VMSS instance with ID: %s\n", instanceID)
-					_, err = vmssClient.Delete(context.TODO(), vmssRG, vmssName, instanceID, nil)
-					if err != nil {
-						log.Printf("Pod Event: Error deleting VMSS instance: %v\n", err)
-						// mutexWatch.Unlock()
-						continue
-					}
+				// if !isDeleteInBatch {
+				log.Printf("Pod Event: Deleting VMSS instance with ID: %s\n", instanceID)
+				_, err = vmssClient.Delete(context.TODO(), vmssRG, vmssName, instanceID, nil)
+				if err != nil {
+					log.Printf("Pod Event: Error deleting VMSS instance: %v\n", err)
+					// mutexWatch.Unlock()
+					continue
 				}
+				// }
 				mutexWatch.Lock()
 				delete(nodesToDeleteWatch, nodeName) // 删除成功后，从删除队列中移除节点
 				log.Printf("Pod Event: Candidate delete node list: %v\n", nodesToDeleteWatch)
@@ -259,20 +256,20 @@ func processNodesbyEvents(clientset *kubernetes.Clientset, vmssClient compute.Vi
 			}
 			// }(nodeName)
 		}
-		defer func() {
-			if isDeleteInBatch {
-				if len(vmssInstances) > 0 {
-					log.Printf("Process Pod Event: Batch Deleting VMSS instance with ID: %s\n", vmssInstances)
-					DeleteVMInstances(vmssClient, vmssInstances)
-				}
-			}
-		}()
+		// defer func() {
+		// 	if isDeleteInBatch {
+		// 		if len(vmssInstances) > 0 {
+		// 			log.Printf("Process Pod Event: Batch Deleting VMSS instance with ID: %s\n", vmssInstances)
+		// 			DeleteVMInstances(vmssClient, vmssInstances)
+		// 		}
+		// 	}
+		// }()
 
-		defer func() {
-			if r := recover(); r != nil {
-				log.Printf("Process Pod Event: Recovered from panic: %v\n", r)
-			}
-		}()
+		// defer func() {
+		// 	if r := recover(); r != nil {
+		// 		log.Printf("Process Pod Event: Recovered from panic: %v\n", r)
+		// 	}
+		// }()
 
 		// mutexWatch.Unlock()
 	}
@@ -286,8 +283,8 @@ func checkAndDeleteNodes(clientset *kubernetes.Clientset, vmssClient compute.Vir
 	nodepool := os.Getenv("FOCUS_NODEPOOL")
 	namespace := os.Getenv("NAMESPACE")
 	labelSelector := "agentpool=" + nodepool
-	isDeleteInBatchStr := os.Getenv("DELETE_IN_BATCH")
-	isDeleteInBatch, _ := strconv.ParseBool(isDeleteInBatchStr)
+	// isDeleteInBatchStr := os.Getenv("DELETE_IN_BATCH")
+	// isDeleteInBatch, _ := strconv.ParseBool(isDeleteInBatchStr)
 
 	log.Printf("On Scheduled: Starting to collect pods from nodepool %s", labelSelector)
 	// List all nodes
@@ -300,7 +297,7 @@ func checkAndDeleteNodes(clientset *kubernetes.Clientset, vmssClient compute.Vir
 		return fmt.Errorf("failed to list nodes: %v", err)
 	}
 	currentCheck := make(map[string]bool)
-	vmssInstances := []string{}
+	// vmssInstances := []string{}
 	for _, node := range nodes.Items {
 		// Check if the node has the specified label
 		// if val, ok := node.Labels[labelKey]; ok && val == labelValue {
@@ -357,7 +354,7 @@ func checkAndDeleteNodes(clientset *kubernetes.Clientset, vmssClient compute.Vir
 
 				// Convert AKS node name to VMSS instance ID
 				vmssName, instanceID, err := convertNodeNameToVMSS(node.Name)
-				vmssInstances = append(vmssInstances, instanceID)
+				// vmssInstances = append(vmssInstances, instanceID)
 				if err != nil {
 					log.Printf("failed to convert node name to VMSS instance ID: %v\n", err)
 					return fmt.Errorf("failed to convert node name to VMSS instance ID: %v", err)
@@ -369,14 +366,14 @@ func checkAndDeleteNodes(clientset *kubernetes.Clientset, vmssClient compute.Vir
 					return fmt.Errorf("error deleting node %s from Kubernetes: %v", node.Name, err)
 				}
 				// Delete the VMSS instance
-				if !isDeleteInBatch {
-					log.Printf("On Scheduled: Deleting VMSS instance with ID: %s\n", instanceID)
-					_, err = vmssClient.Delete(context.TODO(), vmssRG, vmssName, instanceID, nil)
-					if err != nil {
-						log.Printf("Error deleting VMSS instance: %v\n", err)
-						return fmt.Errorf("error deleting VMSS instance: %v", err)
-					}
+				// if !isDeleteInBatch {
+				log.Printf("On Scheduled: Deleting VMSS instance with ID: %s\n", instanceID)
+				_, err = vmssClient.Delete(context.TODO(), vmssRG, vmssName, instanceID, nil)
+				if err != nil {
+					log.Printf("Error deleting VMSS instance: %v\n", err)
+					return fmt.Errorf("error deleting VMSS instance: %v", err)
 				}
+				// }
 				delete(nodesToCheckCycle, node.Name)
 				// log.Printf("On Scheduled: Deleted VMSS instance %s and node %s\n", instanceID, node.Name)
 			} else {
@@ -397,21 +394,21 @@ func checkAndDeleteNodes(clientset *kubernetes.Clientset, vmssClient compute.Vir
 
 	}
 	// isDeleteInBatch := os.Getenv("DELETE_IN_BATCH")
-	defer func() {
-		if isDeleteInBatch {
-			if len(vmssInstances) > 0 {
-				log.Printf("On Scheduled: Batch Deleting VMSS instance with ID: %s\n", vmssInstances)
-				DeleteVMInstances(vmssClient, vmssInstances)
-			}
-		}
-	}()
+	// defer func() {
+	// 	if isDeleteInBatch {
+	// 		if len(vmssInstances) > 0 {
+	// 			log.Printf("On Scheduled: Batch Deleting VMSS instance with ID: %s\n", vmssInstances)
+	// 			DeleteVMInstances(vmssClient, vmssInstances)
+	// 		}
+	// 	}
+	// }()
 
-	defer func() {
-		if r := recover(); r != nil {
-			log.Printf("On Scheduled: Recovered from panic: %v\n", r)
-			// 可以在这里执行任何必要的清理操作
-		}
-	}()
+	// defer func() {
+	// 	if r := recover(); r != nil {
+	// 		log.Printf("On Scheduled: Recovered from panic: %v\n", r)
+	// 		// 可以在这里执行任何必要的清理操作
+	// 	}
+	// }()
 	// nodesToCheckCycle = currentCheck
 	for nodeName := range currentCheck {
 		nodesToCheckCycle[nodeName] = true
@@ -538,7 +535,9 @@ func watchK8SEvents(clientset *kubernetes.Clientset, vmssClient compute.VirtualM
 	log.Printf("Resource group: %s\n", vmssRG)
 	// log.Printf("VMSS name:", vmssName)
 
-	watcher, err := clientset.CoreV1().Pods(namespace).Watch(context.TODO(), metav1.ListOptions{})
+	watcher, err := clientset.CoreV1().Pods(namespace).Watch(context.TODO(), metav1.ListOptions{
+		LabelSelector: labelKey + "=" + labelValue,
+	})
 	if err != nil {
 		panic(err.Error())
 	}
