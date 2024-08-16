@@ -157,6 +157,10 @@ while True:
         logging.info(f"Current Candidate Delete VMSS instance IDs: {current_excess_vm_instance_ids}")
 
         to_delete_vm_instance_ids = current_excess_vm_instance_ids.intersection(previous_excess_vm_instance_ids)
+
+        if to_delete_vm_instance_ids:
+            logging.info(f"Watching VM instances: {to_delete_vm_instance_ids}")
+        
         to_delete_vm_instance_ids = to_delete_vm_instance_ids - set(pending_deletion_vms.keys())
 
         if to_delete_vm_instance_ids:
@@ -184,7 +188,7 @@ while True:
                 if elapsed_time.total_seconds() > notification_interval:
                     logging.error(
                         f"VM instance {vm_id} was not deleted within the expected time of {notification_interval} seconds.")
-                    # send_feishu_webhook(clusterName, os.getenv('FOCUS_NODEPOOL'), vmss_name, vm_id_to_name[vm_id], vm_id)
+                    send_feishu_webhook(clusterName, os.getenv('FOCUS_NODEPOOL'), vmss_name, vm_id_to_name[vm_id], vm_id)
                     # 更新记录的删除时间为当前时间
                     pending_deletion_vms[vm_id] = current_time
             else:
