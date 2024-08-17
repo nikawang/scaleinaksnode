@@ -1,0 +1,4 @@
+azure-mgmt-compute==32.0.0 
+azure-identity==1.17.1
+kubernetes==30.1.0
+
